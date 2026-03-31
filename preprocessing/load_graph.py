@@ -14,7 +14,10 @@ load_dotenv()
 NEO4J_URI      = os.getenv("NEO4J_URI")
 NEO4J_USER     = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-CSV_PATH       = "data/spotify.csv"
+
+# Dynamically find the CSV relative to this script
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSV_PATH = os.path.join(BASE_DIR, "data", "spotify.csv")
 SAMPLE_SIZE    = 1000
 SIMILARITY_THRESHOLD = 0.25  # lower = stricter, higher = more edges
 
