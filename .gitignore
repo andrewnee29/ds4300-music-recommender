@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Environment variables (never commit passwords!)
+.env
+
 # PDF files (submit separately)
 *.pdf
 
