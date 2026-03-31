@@ -3,6 +3,12 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# PDF files (submit separately)
+*.pdf
+
+# IDE files (not needed in repo)
+.idea/
+
 # C extensions
 *.so
 
