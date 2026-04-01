@@ -14,7 +14,7 @@ load_dotenv()
 NEO4J_URI      = os.getenv("NEO4J_URI")
 NEO4J_USER     = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-CSV_PATH       = "data/spotify.csv"
+CSV_PATH       = "/Users/abigailvalladolid/Documents/DS4300/ds4300-music-recommender/data/spotify.csv"
 SAMPLE_SIZE    = 1000
 SIMILARITY_THRESHOLD = 0.25  # lower = stricter, higher = more edges
 

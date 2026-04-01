@@ -1,0 +1,21 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+NEO4J_URI      = os.getenv("NEO4J_URI")
+NEO4J_USER     = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+
+# replace with your CSV path
+CSV_PATH = "/Users/abigailvalladolid/Documents/DS4300/ds4300-music-recommender/data/spotify.csv"
+
+# feel free to change if needed!
+SAMPLE_SIZE = 1000
+SIMILARITY_THRESHOLD = 0.5
+
+FEATURES = [
+    "danceability", "energy", "loudness", "speechiness",
+    "acousticness", "instrumentalness", "liveness",
+    "valence", "tempo"
+]
