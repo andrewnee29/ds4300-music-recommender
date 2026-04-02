@@ -5,7 +5,7 @@ and generates the song recommendations.
 '''
 
 from neo4j import GraphDatabase
-from config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, FAV_ARTISTS
+from config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, ARTISTS
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
@@ -255,10 +255,10 @@ def get_sound_rec(song_title):
 
 
 if __name__ == "__main__":
-    sanity_checks(FAV_ARTISTS)
-    for artist in FAV_ARTISTS:
+    sanity_checks(ARTISTS)
+    for artist in ARTISTS:
         single_artist_recommendations(artist)
-    final_recommendations(FAV_ARTISTS)
+    final_recommendations(ARTISTS)
     genre_analysis()
     get_mood_rec("Reptilia")
     get_sound_rec("Us")

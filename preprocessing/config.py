@@ -27,4 +27,4 @@ FEATURES = [
 ]
 
 # Customize by entering any artists to the list
-FAV_ARTISTS = ["The Strokes", "Regina Spektor"]
+ARTISTS = ["The Strokes", "Regina Spektor"]

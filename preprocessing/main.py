@@ -14,7 +14,7 @@ from neo4j_builder import get_driver, load_all
 
 def main():
     print("Loading & sampling data...")
-    songs = load_and_sample_data(CSV_PATH, SAMPLE_SIZE, FAV_ARTISTS)
+    songs = load_and_sample_data(CSV_PATH, SAMPLE_SIZE, ARTISTS)
 
     print("Computing similarity...")
     sim_matrix, feature_matrix = compute_similarity_matrix(songs, FEATURES)
