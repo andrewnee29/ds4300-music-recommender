@@ -1,29 +1,21 @@
 '''
 Filename: query_runner.py
 This file is the final step in the pipeline that actually queries Neo4j
-and generates the song recommendations
+and generates the song recommendations.
 '''
 
-import os
-from dotenv import load_dotenv
 from neo4j import GraphDatabase
-
-# ─────────────────────────────────────────────
-# CONFIG — loads from .env file
-# ─────────────────────────────────────────────
-load_dotenv()
-
-NEO4J_URI = os.getenv("NEO4J_URI")
-NEO4J_USER = os.getenv("NEO4J_USER")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+from config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, FAV_ARTISTS
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
 
 # Helper function: Run a query and return results as a list of dicts
 def run_query(query, params=None):
     with driver.session() as session:
         results = session.run(query, params or {})
         return [record.data() for record in results]
+
 
 # Helper function: Print results in a readable format
 def print_results(title, results):
@@ -33,7 +25,7 @@ def print_results(title, results):
     for i, r in enumerate(results, 1):
         print(f"{i}. {r}")
 
-# QUERY 0: Sanity Checks
+
 def sanity_checks(artists=None):
     """
     Verifies the graph loaded correctly.
@@ -95,9 +87,9 @@ def single_artist_recommendations(artist: str, limit=5):
 '''
 Query 2: General-purpose multi-artist recommendation function.
 Runs one query per artist, normalizes each artist's scores by their
-song count in the db, then weights each artist equally regardless
-of how many songs they have. This ensures no single artist
-dominates the recommendations just because they have more songs.
+total song count in the db, then weights each artist equally regardless
+of how many songs they have. This ensures no single artist dominates
+the recommendations just because they have more songs.
 '''
 def get_recommendations(artists: list, limit=5):
     exclude_conditions = " AND ".join(
@@ -130,6 +122,7 @@ def get_recommendations(artists: list, limit=5):
             key = r["candidate.track_id"]
             if key not in artist_scores:
                 artist_scores[key] = {"data": r, "total": 0.0}
+            # Each artist contributes at most 1/n of the final score
             artist_scores[key]["total"] += r["score"] / n
 
     # Build final list — songs only connected to 1 of 2 artists max out at 0.5
@@ -141,7 +134,6 @@ def get_recommendations(artists: list, limit=5):
 
     # Sort by final score and return top N
     final = sorted(final, key=lambda x: x["score"], reverse=True)[:limit]
-    print_results(f"Recommendations for {artists}", final)
     return final
 
 
@@ -263,14 +255,11 @@ def get_sound_rec(song_title):
 
 
 if __name__ == "__main__":
-    ARTISTS = ["The Strokes", "Regina Spektor"]
-
-    sanity_checks(ARTISTS)
-    for artist in ARTISTS:
+    sanity_checks(FAV_ARTISTS)
+    for artist in FAV_ARTISTS:
         single_artist_recommendations(artist)
-    final_recommendations(ARTISTS)
+    final_recommendations(FAV_ARTISTS)
     genre_analysis()
     get_mood_rec("Reptilia")
     get_sound_rec("Us")
-
     driver.close()
