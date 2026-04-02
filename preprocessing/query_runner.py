@@ -143,10 +143,26 @@ def final_recommendations():
     print_results("🎵 Top 5 Recommendations for Prof. Rachlin", results)
     return results
 
+def recommend_any_song(song_title):
+    results = run_query("""
+        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
+        WHERE s.title CONTAINS $title
+        RETURN candidate.title, candidate.artist, sum(r.similarity) AS score
+        ORDER BY score DESC
+        LIMIT 5
+    """, {"title": song_title})
+    print_results(f"Recommendations based on: {song_title}", results)
+
+
 
 if __name__ == "__main__":
     sanity_checks()
     strokes_recommendations()
     regina_recommendations()
     final_recommendations()
+
+    # Prove the system works for any song, not just the Strokes/Regina Spektor
+    recommend_any_song("She's Always a Woman")
+    recommend_any_song("Piano Man")
+
     driver.close()
