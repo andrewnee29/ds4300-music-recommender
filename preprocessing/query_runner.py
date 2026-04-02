@@ -104,32 +104,39 @@ def get_recommendations(artists: list, limit=5):
         [f'NOT candidate.artist CONTAINS "{a}"' for a in artists]
     )
 
-    # Run one query per artist, normalize by that artist's song count
+    n = len(artists)
     artist_scores = {}
+
     for artist in artists:
+        # Get total number of songs for this artist in the db
+        total = run_query(f"""
+            MATCH (s:Song)
+            WHERE s.artist CONTAINS "{artist}"
+            RETURN count(s) AS total
+        """)[0]["total"]
+
+        # Divide by total artist songs (not just connected ones)
+        # so songs similar to MORE of the artist's catalog score higher
         query = f"""
             MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
             WHERE s.artist CONTAINS "{artist}"
             AND {exclude_conditions}
-            RETURN candidate.title, candidate.artist,
+            RETURN candidate.track_id, candidate.title, candidate.artist,
                    candidate.album, candidate.genre,
-                   sum(r.similarity) / count(DISTINCT s) AS score
+                   sum(r.similarity) / {total} AS score
         """
         results = run_query(query)
         for r in results:
-            key = r["candidate.title"]
+            key = r["candidate.track_id"]
             if key not in artist_scores:
-                artist_scores[key] = {"data": r, "total": 0.0, "count": 0}
-            artist_scores[key]["total"] += r["score"]
-            artist_scores[key]["count"] += 1
+                artist_scores[key] = {"data": r, "total": 0.0}
+            artist_scores[key]["total"] += r["score"] / n
 
-    # Each artist contributes equally to the final score
-    weight = 1.0 / len(artists)
+    # Build final list — songs only connected to 1 of 2 artists max out at 0.5
     final = []
     for key, val in artist_scores.items():
-        avg_score = val["total"] * weight
         entry = val["data"].copy()
-        entry["score"] = round(avg_score, 4)
+        entry["score"] = round(val["total"], 4)
         final.append(entry)
 
     # Sort by final score and return top N
@@ -198,6 +205,7 @@ def get_mood_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre = candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         RETURN candidate.title, candidate.artist, candidate.album,
                candidate.genre, round(r.similarity, 4) AS mood_score
         ORDER BY mood_score DESC
@@ -209,6 +217,14 @@ def get_mood_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
+        RETURN candidate.title, candidate.artist, candidate.album,
+               candidate.genre, round(r.similarity, 4) AS mood_score
+        ORDER BY mood_score DESC
+        LIMIT 1
+    """, {"title": song_title})
+
+    print_results(f"Mood Recommendations for '{song_title}'", same_genre + diff_genre)
     return same_genre + diff_genre
 
 
@@ -223,6 +239,7 @@ def get_sound_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre = candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         RETURN candidate.title, candidate.artist, candidate.album,
                candidate.genre, round(r.similarity, 4) AS sound_score
         ORDER BY sound_score DESC
@@ -234,6 +251,7 @@ def get_sound_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         RETURN candidate.title, candidate.artist, candidate.album,
                candidate.genre, round(r.similarity, 4) AS sound_score
         ORDER BY sound_score DESC
@@ -254,9 +272,5 @@ if __name__ == "__main__":
     genre_analysis()
     get_mood_rec("Reptilia")
     get_sound_rec("Us")
-
-    # Prove the system works for any artist
-    get_recommendations(["Drake"])
-    get_recommendations(["Taylor Swift", "Ariana Grande"])
 
     driver.close()
