@@ -25,4 +25,5 @@ FEATURES = [
     "valence", "tempo"
 ]
 
-FAV_ARTISTS = "The Strokes|Regina Spektor"
+# customize by entering any artist/artists to the list
+ARTISTS = ["The Strokes", "Regina Spektor"]
