@@ -1,3 +1,8 @@
+'''
+Name: neo4j_builder.py
+
+load everything into neo4j
+'''
 from neo4j import GraphDatabase
 
 def get_driver(uri, user, password):
@@ -27,7 +32,16 @@ def load_edges(tx, batch):
         MATCH (a:Song {track_id: e.id1})
         MATCH (b:Song {track_id: e.id2})
         MERGE (a)-[r:SIMILAR_TO]->(b)
-        SET r.similarity = e.similarity
+        SET r.similarity            = e.similarity,
+            r.danceability_sim      = e.danceability_sim,
+            r.energy_sim            = e.energy_sim,
+            r.loudness_sim          = e.loudness_sim,
+            r.acousticness_sim      = e.acousticness_sim,
+            r.valence_sim           = e.valence_sim,
+            r.tempo_sim             = e.tempo_sim,
+            r.speechiness_sim       = e.speechiness_sim,
+            r.instrumentalness_sim  = e.instrumentalness_sim,
+            r.liveness_sim          = e.liveness_sim
     """, edges=batch)
 
 

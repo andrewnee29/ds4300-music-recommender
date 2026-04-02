@@ -1,3 +1,8 @@
+'''
+Name: config.py
+Central configuration file fo the music recommender.
+All shared constants, credentials, and feature definitions are stored here
+'''
 import os
 from dotenv import load_dotenv
 
@@ -8,7 +13,7 @@ NEO4J_USER     = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 # replace with your CSV path
-CSV_PATH = "/Users/abigailvalladolid/Documents/DS4300/ds4300-music-recommender/data/spotify.csv"
+CSV_PATH = "/Users/kathleenlautenbach/Desktop/DS4300/ds4300-music-recommender/data/spotify.csv"
 
 # feel free to change if needed!
 SAMPLE_SIZE = 1000
@@ -19,3 +24,5 @@ FEATURES = [
     "acousticness", "instrumentalness", "liveness",
     "valence", "tempo"
 ]
+
+FAV_ARTISTS = "The Strokes|Regina Spektor"
