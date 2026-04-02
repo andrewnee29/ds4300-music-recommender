@@ -209,13 +209,6 @@ def get_mood_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
-        RETURN candidate.title, candidate.artist, candidate.album,
-               candidate.genre, round(r.similarity, 4) AS mood_score
-        ORDER BY mood_score DESC
-        LIMIT 1
-    """, {"title": song_title})
-
-    print_results(f"Mood Recommendations for '{song_title}'", same_genre + diff_genre)
     return same_genre + diff_genre
 
 
