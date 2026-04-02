@@ -69,6 +69,11 @@ def sanity_checks():
     """)
     print_results("Regina Spektor Songs", regina_songs)
 
+    total = run_query("""
+        MATCH (s:Song)
+        RETURN count(s) AS total, collect(DISTINCT s.artist)[0..10] AS sample_artists
+    """)
+    print_results("Total Songs and Sample Artists", total)
 
 '''
 Query 1: Find songs similar to The Strokes
@@ -143,6 +148,10 @@ def final_recommendations():
     print_results("🎵 Top 5 Recommendations for Prof. Rachlin", results)
     return results
 
+'''
+This proves the general use of our system, below in the driver function feel free 
+to test out different songs to receive recommendations
+'''
 def recommend_any_song(song_title):
     results = run_query("""
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
@@ -153,13 +162,56 @@ def recommend_any_song(song_title):
     """, {"title": song_title})
     print_results(f"Recommendations based on: {song_title}", results)
 
+def genre_analysis():
+    # How many edges stay WITHIN the same genre
+    within_genre = run_query("""
+        MATCH (s:Song)-[:SIMILAR_TO]-(candidate:Song)
+        WHERE s.genre = candidate.genre
+        RETURN s.genre, count(*) AS within_genre_edges
+        ORDER BY within_genre_edges DESC
+        LIMIT 10
+    """)
+    print_results("Within-Genre Connections (Top 10)", within_genre)
+
+    # How many edges CROSS between different genres
+    cross_genre = run_query("""
+        MATCH (s:Song)-[:SIMILAR_TO]-(candidate:Song)
+        WHERE s.genre <> candidate.genre
+        RETURN s.genre, candidate.genre, count(*) AS cross_genre_edges
+        ORDER BY cross_genre_edges DESC
+        LIMIT 10
+    """)
+    print_results("Cross-Genre Connections (Top 10)", cross_genre)
+
+    # Which genres are most isolated vs most connected to others
+    genre_reach = run_query("""
+        MATCH (s:Song)-[:SIMILAR_TO]-(candidate:Song)
+        WHERE s.genre = candidate.genre
+        RETURN s.genre, count(*) AS within_genre_edges
+        ORDER BY within_genre_edges DESC
+        LIMIT 10
+    """)
+    print_results("Genre Reach (how many other genres each genre connects to)", genre_reach)
 
 
 if __name__ == "__main__":
+    def list_some_songs():
+        results = run_query("""
+            MATCH (s:Song)
+            WHERE NOT s.artist CONTAINS "The Strokes"
+            AND NOT s.artist CONTAINS "Regina Spektor"
+            RETURN s.title, s.artist
+            LIMIT 20
+        """)
+        print_results("Sample Songs In Database", results)
+
+
     sanity_checks()
     strokes_recommendations()
     regina_recommendations()
     final_recommendations()
+    genre_analysis()
+
 
     # Prove the system works for any song, not just the Strokes/Regina Spektor
     recommend_any_song("She's Always a Woman")
