@@ -202,6 +202,7 @@ def get_mood_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre = candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         WITH candidate,
              (r.valence_sim + r.energy_sim + 
               r.danceability_sim + r.tempo_sim) / 4 AS mood_score
@@ -216,6 +217,7 @@ def get_mood_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         WITH candidate,
              (r.valence_sim + r.energy_sim + 
               r.danceability_sim + r.tempo_sim) / 4 AS mood_score
@@ -240,6 +242,7 @@ def get_sound_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre = candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         WITH candidate,
              (r.loudness_sim + r.instrumentalness_sim + 
               r.acousticness_sim) / 3 AS sound_score
@@ -254,6 +257,7 @@ def get_sound_rec(song_title):
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
+        AND NOT candidate.artist CONTAINS s.artist
         WITH candidate,
              (r.loudness_sim + r.instrumentalness_sim + 
               r.acousticness_sim) / 3 AS sound_score
