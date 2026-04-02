@@ -17,8 +17,8 @@ from neo4j import GraphDatabase
 # ─────────────────────────────────────────────
 load_dotenv()
 
-NEO4J_URI      = os.getenv("NEO4J_URI")
-NEO4J_USER     = os.getenv("NEO4J_USER")
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USER = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
@@ -56,7 +56,7 @@ def sanity_checks():
     # check that Strokes songs loaded
     strokes_songs = run_query("""
         MATCH (s:Song)
-        WHERE s.artist="The Strokes"
+        WHERE s.artist CONTAINS "The Strokes"
         RETURN s.title, s.artist
     """)
     print_results("The Strokes Songs", strokes_songs)
@@ -193,6 +193,78 @@ def genre_analysis():
     """)
     print_results("Genre Reach (how many other genres each genre connects to)", genre_reach)
 
+def get_mood_rec(song_title):
+    '''evaluates the similarity scores based on specific mood features of the
+    song: valence, energy, danceability, and tempo'''
+
+    # same genre match
+    same_genre = run_query("""
+        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
+        WHERE s.title CONTAINS $title
+        AND s.genre = candidate.genre
+        WITH candidate,
+             (r.valence_sim + r.energy_sim + 
+              r.danceability_sim + r.tempo_sim) / 4 AS mood_score
+        RETURN candidate.title, candidate.artist, candidate.album,
+               candidate.genre, round(mood_score, 4) AS mood_score
+        ORDER BY mood_score DESC
+        LIMIT 1
+    """, {"title": song_title})
+
+    # different genre match
+    diff_genre = run_query("""
+        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
+        WHERE s.title CONTAINS $title
+        AND s.genre <> candidate.genre
+        WITH candidate,
+             (r.valence_sim + r.energy_sim + 
+              r.danceability_sim + r.tempo_sim) / 4 AS mood_score
+        RETURN candidate.title, candidate.artist, candidate.album,
+               candidate.genre, round(mood_score, 4) AS mood_score
+        ORDER BY mood_score DESC
+        LIMIT 1
+    """, {"title": song_title})
+
+    print_results(f"Mood Recommendations for {song_title}", same_genre + diff_genre)
+    return same_genre + diff_genre
+
+
+def get_sound_rec(song_title):
+    """
+    Recommend songs that match the sound texture of a given song.
+    Sound is decided by attributes: loudness, instrumentalness, and acousticness similarity.
+    """
+
+    # same genre match
+    same_genre = run_query("""
+        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
+        WHERE s.title CONTAINS $title
+        AND s.genre = candidate.genre
+        WITH candidate,
+             (r.loudness_sim + r.instrumentalness_sim + 
+              r.acousticness_sim) / 3 AS sound_score
+        RETURN candidate.title, candidate.artist, candidate.album,
+               candidate.genre, round(sound_score, 4) AS sound_score
+        ORDER BY sound_score DESC
+        LIMIT 1
+    """, {"title": song_title})
+
+    # different genre match
+    diff_genre = run_query("""
+        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
+        WHERE s.title CONTAINS $title
+        AND s.genre <> candidate.genre
+        WITH candidate,
+             (r.loudness_sim + r.instrumentalness_sim + 
+              r.acousticness_sim) / 3 AS sound_score
+        RETURN candidate.title, candidate.artist, candidate.album,
+               candidate.genre, round(sound_score, 4) AS sound_score
+        ORDER BY sound_score DESC
+        LIMIT 1
+    """, {"title": song_title})
+
+    print_results(f"Sound Recommendations for {song_title}", same_genre + diff_genre)
+    return same_genre + diff_genre
 
 if __name__ == "__main__":
     def list_some_songs():
@@ -211,10 +283,13 @@ if __name__ == "__main__":
     regina_recommendations()
     final_recommendations()
     genre_analysis()
+    get_mood_rec("Reptilia")
+    get_sound_rec("Us")
 
 
     # Prove the system works for any song, not just the Strokes/Regina Spektor
     recommend_any_song("She's Always a Woman")
     recommend_any_song("Piano Man")
+
 
     driver.close()

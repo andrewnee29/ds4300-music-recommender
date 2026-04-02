@@ -26,7 +26,7 @@ def load_and_sample_data(csv_path, sample_size, fav_artists):
     # get seed artist genres
     seed_genres = fav["track_genre"].dropna().unique().tolist()
 
-    # split rest into genre-matching and non-matching pools
+    # split rest into genre-liked and new-genre samples
     genre_pool = rest[rest["track_genre"].isin(seed_genres)]
     new_genre_pool = rest[~rest["track_genre"].isin(seed_genres)]
 
