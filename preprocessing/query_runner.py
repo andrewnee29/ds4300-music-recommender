@@ -1,12 +1,8 @@
 '''
-
 Filename: query_runner.py
-This file is the  final step in the pipeline that actually queries Neo4j
+This file is the final step in the pipeline that actually queries Neo4j
 and generates the song recommendations
-
 '''
-
-
 
 import os
 from dotenv import load_dotenv
@@ -23,13 +19,13 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
-#
-# Helper function: Run a query and print results
+# Helper function: Run a query and return results as a list of dicts
 def run_query(query, params=None):
     with driver.session() as session:
         results = session.run(query, params or {})
         return [record.data() for record in results]
 
+# Helper function: Print results in a readable format
 def print_results(title, results):
     print(f"\n{'='*50}")
     print(f" {title}")
@@ -38,132 +34,129 @@ def print_results(title, results):
         print(f"{i}. {r}")
 
 # QUERY 0: Sanity Checks
-def sanity_checks():
-    # count total nodes, how many songs are in the db total?
+def sanity_checks(artists=None):
+    """
+    Verifies the graph loaded correctly.
+    Optionally pass a list of artists to confirm their songs are in the db.
+    Example: sanity_checks(["The Strokes", "Regina Spektor"])
+    """
+    # Count total number of Song nodes in the graph
     total_songs = run_query("""
         MATCH (s:Song)
         RETURN count(s) as total_songs
     """)
     print_results("Total Songs", total_songs)
 
-    # How many SIMILAR_TO edges exist?
+    # Count total number of SIMILAR_TO relationships in the graph
     total_edges = run_query("""
         MATCH ()-[r:SIMILAR_TO]->()
         RETURN count(r) as total_edges
     """)
     print_results("Total Edges", total_edges)
 
-    # check that Strokes songs loaded
-    strokes_songs = run_query("""
-        MATCH (s:Song)
-        WHERE s.artist CONTAINS "The Strokes"
-        RETURN s.title, s.artist
-    """)
-    print_results("The Strokes Songs", strokes_songs)
+    # For each artist, confirm their songs are present in the graph
+    if artists:
+        for artist in artists:
+            songs = run_query(f"""
+                MATCH (s:Song)
+                WHERE s.artist CONTAINS "{artist}"
+                RETURN s.title, s.artist
+            """)
+            print_results(f"{artist} Songs", songs)
 
-    # check that Regina Spektor songs loaded
-    regina_songs = run_query("""
-        MATCH (s:Song)
-        WHERE s.artist="Regina Spektor"
-        RETURN s.title, s.artist
-    """)
-    print_results("Regina Spektor Songs", regina_songs)
-
+    # Show total song count and a sample of artists in the graph
     total = run_query("""
         MATCH (s:Song)
         RETURN count(s) AS total, collect(DISTINCT s.artist)[0..10] AS sample_artists
     """)
     print_results("Total Songs and Sample Artists", total)
 
-'''
-Query 1: Find songs similar to The Strokes
-    Traverses the graph from every Strokes node, 
-    follows the SIMILAR_TO edges, then ranks candidates by 
-    their total similarity score
-'''
-def strokes_recommendations():
-    results = run_query("""
-        // TODO: traverse edges from Strokes songs
-        //       to find highly similar candidates
-        
-        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
-        WHERE s.artist CONTAINS "The Strokes"
-        AND NOT candidate.artist CONTAINS "The Strokes"
-        AND NOT candidate.artist CONTAINS "Regina Spektor"
-        RETURN candidate.title, candidate.artist, candidate.album, candidate.genre, 
-               sum(r.similarity) AS score
-        ORDER BY score DESC
-        LIMIT 5
-    """)
-    print_results("Songs Similar to The Strokes", results)
-    return results
 
 '''
-Query 2: Find songs similar to Regina Spektor
-    Traverses the graph from every R.S node, 
-    follows the SIMILAR_TO edges, then ranks candidates by 
-    their total similarity score
-
+Query 1: Find songs similar to a single artist.
+Traverses SIMILAR_TO edges from the given artist's songs,
+aggregates similarity scores across all their songs,
+and returns the top candidates ranked by total score.
 '''
-def regina_recommendations():
-    results = run_query("""
-        // TODO: traverse edges from Regina Spektor songs
-        //       to find highly similar candidates
-        
+def single_artist_recommendations(artist: str, limit=5):
+    results = run_query(f"""
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
-        WHERE s.artist CONTAINS "Regina Spektor"
-        AND NOT candidate.artist CONTAINS "The Strokes"
-        AND NOT candidate.artist CONTAINS "Regina Spektor"
+        WHERE s.artist CONTAINS "{artist}"
+        AND NOT candidate.artist CONTAINS "{artist}"
         RETURN candidate.title, candidate.artist, candidate.album, candidate.genre,
                sum(r.similarity) AS score
         ORDER BY score DESC
-        LIMIT 5
+        LIMIT {limit}
     """)
-    print_results("Songs Similar to Regina Spektor", results)
+    print_results(f"Songs Similar to {artist}", results)
     return results
 
 
 '''
-Query 3: Gather the final reccomendations:
-This query combines both artists and returns the single ranked top 5 list. 
-It scores candidates based on similarity to both artists combined, 
-meaning songs that are similar to both will rank 
-higher than songs that only match one
+Query 2: General-purpose multi-artist recommendation function.
+Runs one query per artist, normalizes each artist's scores by their
+song count in the db, then weights each artist equally regardless
+of how many songs they have. This ensures no single artist
+dominates the recommendations just because they have more songs.
 '''
-def final_recommendations():
-    results = run_query("""
-        // TODO: combine both artists, score candidates,
-        //       filter out Strokes + Regina Spektor,
-        //       return top 5 with artist, album, title, score
-        
-        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
-        WHERE (s.artist CONTAINS "Regina Spektor" OR s.artist CONTAINS "The Strokes")
-        AND NOT candidate.artist CONTAINS "The Strokes"
-        AND NOT candidate.artist CONTAINS "Regina Spektor"
-        RETURN candidate.title, candidate.artist, candidate.album, candidate.genre,
-               sum(r.similarity) AS score
-        ORDER BY score DESC
-        LIMIT 5
-    """)
-    print_results("🎵 Top 5 Recommendations for Prof. Rachlin", results)
-    return results
+def get_recommendations(artists: list, limit=5):
+    exclude_conditions = " AND ".join(
+        [f'NOT candidate.artist CONTAINS "{a}"' for a in artists]
+    )
+
+    # Run one query per artist, normalize by that artist's song count
+    artist_scores = {}
+    for artist in artists:
+        query = f"""
+            MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
+            WHERE s.artist CONTAINS "{artist}"
+            AND {exclude_conditions}
+            RETURN candidate.title, candidate.artist,
+                   candidate.album, candidate.genre,
+                   sum(r.similarity) / count(DISTINCT s) AS score
+        """
+        results = run_query(query)
+        for r in results:
+            key = r["candidate.title"]
+            if key not in artist_scores:
+                artist_scores[key] = {"data": r, "total": 0.0, "count": 0}
+            artist_scores[key]["total"] += r["score"]
+            artist_scores[key]["count"] += 1
+
+    # Each artist contributes equally to the final score
+    weight = 1.0 / len(artists)
+    final = []
+    for key, val in artist_scores.items():
+        avg_score = val["total"] * weight
+        entry = val["data"].copy()
+        entry["score"] = round(avg_score, 4)
+        final.append(entry)
+
+    # Sort by final score and return top N
+    final = sorted(final, key=lambda x: x["score"], reverse=True)[:limit]
+    print_results(f"Recommendations for {artists}", final)
+    return final
+
 
 '''
-This proves the general use of our system, below in the driver function feel free 
-to test out different songs to receive recommendations
+Query 3: Final top N recommendations for a list of artists.
+Wraps get_recommendations() to produce the final ranked list,
+combining similarity scores evenly across all provided artists.
 '''
-def recommend_any_song(song_title):
-    results = run_query("""
-        MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
-        WHERE s.title CONTAINS $title
-        RETURN candidate.title, candidate.artist, sum(r.similarity) AS score
-        ORDER BY score DESC
-        LIMIT 5
-    """, {"title": song_title})
-    print_results(f"Recommendations based on: {song_title}", results)
+def final_recommendations(artists: list, limit=5):
+    results = get_recommendations(artists, limit)
+    print_results(f"🎵 Top {limit} Recommendations for {artists}", results)
+    return results
+
 
 def genre_analysis():
-    # How many edges stay WITHIN the same genre
+    """
+    Analyzes the structure of the graph by genre.
+    Shows which genres are most interconnected within themselves,
+    which genres cross over most to others, and which genres
+    have the broadest reach across the graph.
+    """
+    # Count edges between songs of the same genre
     within_genre = run_query("""
         MATCH (s:Song)-[:SIMILAR_TO]-(candidate:Song)
         WHERE s.genre = candidate.genre
@@ -173,7 +166,7 @@ def genre_analysis():
     """)
     print_results("Within-Genre Connections (Top 10)", within_genre)
 
-    # How many edges CROSS between different genres
+    # Count edges between songs of different genres
     cross_genre = run_query("""
         MATCH (s:Song)-[:SIMILAR_TO]-(candidate:Song)
         WHERE s.genre <> candidate.genre
@@ -183,113 +176,94 @@ def genre_analysis():
     """)
     print_results("Cross-Genre Connections (Top 10)", cross_genre)
 
-    # Which genres are most isolated vs most connected to others
+    # Count how many distinct genres each genre connects to
     genre_reach = run_query("""
         MATCH (s:Song)-[:SIMILAR_TO]-(candidate:Song)
-        WHERE s.genre = candidate.genre
-        RETURN s.genre, count(*) AS within_genre_edges
-        ORDER BY within_genre_edges DESC
+        WHERE s.genre <> candidate.genre
+        RETURN s.genre, count(DISTINCT candidate.genre) AS other_genres_reached
+        ORDER BY other_genres_reached DESC
         LIMIT 10
     """)
     print_results("Genre Reach (how many other genres each genre connects to)", genre_reach)
 
-def get_mood_rec(song_title):
-    '''evaluates the similarity scores based on specific mood features of the
-    song: valence, energy, danceability, and tempo'''
 
-    # same genre match
+def get_mood_rec(song_title):
+    """
+    Recommends songs that match the mood of a given song using overall similarity.
+    Returns one same-genre match and one cross-genre match,
+    showing that mood can transcend genre boundaries.
+    """
+    # Find the most similar song within the same genre
     same_genre = run_query("""
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre = candidate.genre
-        WITH candidate,
-             (r.valence_sim + r.energy_sim + 
-              r.danceability_sim + r.tempo_sim) / 4 AS mood_score
         RETURN candidate.title, candidate.artist, candidate.album,
-               candidate.genre, round(mood_score, 4) AS mood_score
+               candidate.genre, round(r.similarity, 4) AS mood_score
         ORDER BY mood_score DESC
         LIMIT 1
     """, {"title": song_title})
 
-    # different genre match
+    # Find the most similar song from a different genre
     diff_genre = run_query("""
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
-        WITH candidate,
-             (r.valence_sim + r.energy_sim + 
-              r.danceability_sim + r.tempo_sim) / 4 AS mood_score
         RETURN candidate.title, candidate.artist, candidate.album,
-               candidate.genre, round(mood_score, 4) AS mood_score
+               candidate.genre, round(r.similarity, 4) AS mood_score
         ORDER BY mood_score DESC
         LIMIT 1
     """, {"title": song_title})
 
-    print_results(f"Mood Recommendations for {song_title}", same_genre + diff_genre)
+    print_results(f"Mood Recommendations for '{song_title}'", same_genre + diff_genre)
     return same_genre + diff_genre
 
 
 def get_sound_rec(song_title):
     """
-    Recommend songs that match the sound texture of a given song.
-    Sound is decided by attributes: loudness, instrumentalness, and acousticness similarity.
+    Recommends songs that match the sound texture of a given song using overall similarity.
+    Returns one same-genre match and one cross-genre match,
+    demonstrating that sonic texture can appear across different genres.
     """
-
-    # same genre match
+    # Find the most sonically similar song within the same genre
     same_genre = run_query("""
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre = candidate.genre
-        WITH candidate,
-             (r.loudness_sim + r.instrumentalness_sim + 
-              r.acousticness_sim) / 3 AS sound_score
         RETURN candidate.title, candidate.artist, candidate.album,
-               candidate.genre, round(sound_score, 4) AS sound_score
+               candidate.genre, round(r.similarity, 4) AS sound_score
         ORDER BY sound_score DESC
         LIMIT 1
     """, {"title": song_title})
 
-    # different genre match
+    # Find the most sonically similar song from a different genre
     diff_genre = run_query("""
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
         WHERE s.title CONTAINS $title
         AND s.genre <> candidate.genre
-        WITH candidate,
-             (r.loudness_sim + r.instrumentalness_sim + 
-              r.acousticness_sim) / 3 AS sound_score
         RETURN candidate.title, candidate.artist, candidate.album,
-               candidate.genre, round(sound_score, 4) AS sound_score
+               candidate.genre, round(r.similarity, 4) AS sound_score
         ORDER BY sound_score DESC
         LIMIT 1
     """, {"title": song_title})
 
-    print_results(f"Sound Recommendations for {song_title}", same_genre + diff_genre)
+    print_results(f"Sound Recommendations for '{song_title}'", same_genre + diff_genre)
     return same_genre + diff_genre
 
+
 if __name__ == "__main__":
-    def list_some_songs():
-        results = run_query("""
-            MATCH (s:Song)
-            WHERE NOT s.artist CONTAINS "The Strokes"
-            AND NOT s.artist CONTAINS "Regina Spektor"
-            RETURN s.title, s.artist
-            LIMIT 20
-        """)
-        print_results("Sample Songs In Database", results)
+    ARTISTS = ["The Strokes", "Regina Spektor"]
 
-
-    sanity_checks()
-    strokes_recommendations()
-    regina_recommendations()
-    final_recommendations()
+    sanity_checks(ARTISTS)
+    for artist in ARTISTS:
+        single_artist_recommendations(artist)
+    final_recommendations(ARTISTS)
     genre_analysis()
     get_mood_rec("Reptilia")
     get_sound_rec("Us")
 
-
-    # Prove the system works for any song, not just the Strokes/Regina Spektor
-    recommend_any_song("She's Always a Woman")
-    recommend_any_song("Piano Man")
-
+    # Prove the system works for any artist
+    get_recommendations(["Drake"])
+    get_recommendations(["Taylor Swift", "Ariana Grande"])
 
     driver.close()
