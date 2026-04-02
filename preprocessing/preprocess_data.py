@@ -35,7 +35,7 @@ def load_and_sample_data(csv_path, sample_size, fav_artists):
     liked_genre_sample_n = max(0, int(remaining * 0.8))
     new_genre_sample_n = max(0, remaining - liked_genre_sample_n)
 
-    # sample from each pool, with fallback if not enough songs
+    # sample from each pool
     liked_sample = genre_pool.sample(n=min(liked_genre_sample_n, len(genre_pool)),
                                      random_state=42)
     new_sample = new_genre_pool.sample(n=min(new_genre_sample_n, len(new_genre_pool)),
