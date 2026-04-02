@@ -1,3 +1,13 @@
+'''
+
+Filename: query_runner.py
+This file is the  final step in the pipeline that actually queries Neo4j
+and generates the song recommendations
+
+'''
+
+
+
 import os
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
@@ -13,9 +23,8 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
-# ─────────────────────────────────────────────
-# HELPER: Run a query and print results
-# ─────────────────────────────────────────────
+#
+# Helper function: Run a query and print results
 def run_query(query, params=None):
     with driver.session() as session:
         results = session.run(query, params or {})
@@ -28,25 +37,23 @@ def print_results(title, results):
     for i, r in enumerate(results, 1):
         print(f"{i}. {r}")
 
-# ─────────────────────────────────────────────
 # QUERY 0: Sanity Checks
-# ─────────────────────────────────────────────
 def sanity_checks():
-    # TODO: count total nodes
+    # count total nodes, how many songs are in the db total?
     total_songs = run_query("""
         MATCH (s:Song)
         RETURN count(s) as total_songs
     """)
     print_results("Total Songs", total_songs)
 
-    # TODO: count total edges
+    # How many SIMILAR_TO edges exist?
     total_edges = run_query("""
         MATCH ()-[r:SIMILAR_TO]->()
         RETURN count(r) as total_edges
     """)
     print_results("Total Edges", total_edges)
 
-    # TODO: confirm Strokes songs loaded
+    # check that Strokes songs loaded
     strokes_songs = run_query("""
         MATCH (s:Song)
         WHERE s.artist="The Strokes"
@@ -54,7 +61,7 @@ def sanity_checks():
     """)
     print_results("The Strokes Songs", strokes_songs)
 
-    # TODO: confirm Regina Spektor songs loaded
+    # check that Regina Spektor songs loaded
     regina_songs = run_query("""
         MATCH (s:Song)
         WHERE s.artist="Regina Spektor"
@@ -62,9 +69,13 @@ def sanity_checks():
     """)
     print_results("Regina Spektor Songs", regina_songs)
 
-# ─────────────────────────────────────────────
-# QUERY 1: Songs Similar to The Strokes
-# ─────────────────────────────────────────────
+
+'''
+Query 1: Find songs similar to The Strokes
+    Traverses the graph from every Strokes node, 
+    follows the SIMILAR_TO edges, then ranks candidates by 
+    their total similarity score
+'''
 def strokes_recommendations():
     results = run_query("""
         // TODO: traverse edges from Strokes songs
@@ -82,9 +93,13 @@ def strokes_recommendations():
     print_results("Songs Similar to The Strokes", results)
     return results
 
-# ─────────────────────────────────────────────
-# QUERY 2: Songs Similar to Regina Spektor
-# ─────────────────────────────────────────────
+'''
+Query 2: Find songs similar to Regina Spektor
+    Traverses the graph from every R.S node, 
+    follows the SIMILAR_TO edges, then ranks candidates by 
+    their total similarity score
+
+'''
 def regina_recommendations():
     results = run_query("""
         // TODO: traverse edges from Regina Spektor songs
@@ -102,10 +117,14 @@ def regina_recommendations():
     print_results("Songs Similar to Regina Spektor", results)
     return results
 
-# ─────────────────────────────────────────────
-# QUERY 3: Final Top 5 Recommendations
-# Combined score from both artists, filtered and ranked
-# ─────────────────────────────────────────────
+
+'''
+Query 3: Gather the final reccomendations:
+This query combines both artists and returns the single ranked top 5 list. 
+It scores candidates based on similarity to both artists combined, 
+meaning songs that are similar to both will rank 
+higher than songs that only match one
+'''
 def final_recommendations():
     results = run_query("""
         // TODO: combine both artists, score candidates,
@@ -113,7 +132,7 @@ def final_recommendations():
         //       return top 5 with artist, album, title, score
         
         MATCH (s:Song)-[r:SIMILAR_TO]-(candidate:Song)
-        WHERE s.artist CONTAINS "Regina Spektor" OR s.artist CONTAINS "The Strokes"
+        WHERE (s.artist CONTAINS "Regina Spektor" OR s.artist CONTAINS "The Strokes")
         AND NOT candidate.artist CONTAINS "The Strokes"
         AND NOT candidate.artist CONTAINS "Regina Spektor"
         RETURN candidate.title, candidate.artist, candidate.album, candidate.genre,
@@ -124,9 +143,7 @@ def final_recommendations():
     print_results("🎵 Top 5 Recommendations for Prof. Rachlin", results)
     return results
 
-# ─────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────
+
 if __name__ == "__main__":
     sanity_checks()
     strokes_recommendations()
